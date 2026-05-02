@@ -1,64 +1,65 @@
 package com.student.tuiasi.moderation.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import java.util.*;
 
 @Service
 public class ModerationService {
-    
+
     private final RestTemplate restTemplate = new RestTemplate();
-    
-    // URL-ul corect pentru API call
-    private final String apiUrl = "https://api-inference.huggingface.co/models/distilbert-base-uncased-finetuned-sst-2-english";
-    
-    // Token-ul tău de la Hugging Face
-    private final String apiToken = "AiCi pUi ToKeN uL dE aCcEs De La Huggingface"; // NU UITA SA PUI AICIIIIIIIIIIIIIIIIII
-    
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Value("${huggingface.api.url}")
+    private String apiUrl;
+
+    @Value("${huggingface.api.token}")
+    private String apiToken;
+
+    private static final double TOXICITY_THRESHOLD = 0.5;
+
     public ModerationResult analyzeText(String text) {
         try {
-            // 1. Pregătește header-ele
             HttpHeaders headers = new HttpHeaders();
             headers.set("Authorization", "Bearer " + apiToken);
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            
-            // 2. Pregătește body-ul
-            Map<String, String> requestBody = new HashMap<>();
-            requestBody.put("inputs", text);
-            
-            HttpEntity<Map<String, String>> request = new HttpEntity<>(requestBody, headers);
-            
-            // 3. Trimite request-ul
-            ResponseEntity<List> response = restTemplate.exchange(
+            headers.set("Content-Type", "application/json");
+            headers.set("Accept", "application/json");
+
+            String requestBody = "{\"inputs\": \"" + text.replace("\"", "\\\"") + "\"}";
+            HttpEntity<String> request = new HttpEntity<>(requestBody, headers);
+
+            ResponseEntity<String> response = restTemplate.exchange(
                 apiUrl,
                 HttpMethod.POST,
                 request,
-                List.class
+                String.class
             );
-            
-            // 4. Parsează răspunsul
-            List<?> responseBody = response.getBody();
-            if (responseBody != null && !responseBody.isEmpty()) {
-                Map<String, Object> firstResult = (Map<String, Object>) responseBody.get(0);
-                String label = (String) firstResult.get("label");
-                Double score = (Double) firstResult.get("score");
-                
-                boolean isBlocked = "NEGATIVE".equals(label);
-                
-                System.out.println("Text: " + text);
-                System.out.println("Rezultat: " + label + " (scor: " + score + ")");
-                System.out.println("Decizie: " + (isBlocked ? "BLOCAT" : "APROBAT"));
-                
-                return new ModerationResult(isBlocked, score, label);
+
+            JsonNode root = objectMapper.readTree(response.getBody());
+            JsonNode inner = root.get(0);
+
+            for (JsonNode item : inner) {
+                String label = item.get("label").asText();
+                double score = item.get("score").asDouble();
+
+                if ("toxicity".equalsIgnoreCase(label)) {
+                    boolean isBlocked = score >= TOXICITY_THRESHOLD;
+                    System.out.println("[Moderation] Text analizat | Label: "
+                        + label + " | Score: " + score
+                        + " | Decizie: " + (isBlocked ? "BLOCAT" : "APROBAT"));
+                    return new ModerationResult(isBlocked, score, label);
+                }
             }
+
         } catch (Exception e) {
-            System.err.println("Eroare: " + e.getMessage());
-            e.printStackTrace();
+            System.err.println("[Moderation] Eroare la apelul HuggingFace: " + e.getMessage());
         }
-        
+
         return new ModerationResult(false, 0.0, "ERROR");
     }
-    
+
     public record ModerationResult(boolean blocked, double confidence, String label) {}
 }
