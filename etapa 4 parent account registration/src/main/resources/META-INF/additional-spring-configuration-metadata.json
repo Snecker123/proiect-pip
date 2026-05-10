@@ -1,0 +1,14 @@
+{
+  "properties": [
+    {
+      "name": "huggingface.api.token",
+      "type": "java.lang.String",
+      "description": "HuggingFace API access token"
+    },
+    {
+      "name": "huggingface.api.url",
+      "type": "java.lang.String",
+      "description": "HuggingFace model inference URL"
+    }
+  ]
+}
