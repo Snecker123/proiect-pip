@@ -7,20 +7,42 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+/**
+ * Serviciu pentru moderarea textului folosind HuggingFace Inference API.
+ * Analizeaza textul primit si returneaza un scor de toxicitate.
+ * Textele cu scor peste pragul definit sunt marcate ca blocate.
+ */
 @Service
 public class ModerationService {
 
+    /** Client HTTP pentru apelarea API-ului HuggingFace. */
     private final RestTemplate restTemplate = new RestTemplate();
+
+    /** Obiect pentru parsarea raspunsurilor JSON. */
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    /** URL-ul endpoint-ului de inferenta HuggingFace. */
     @Value("${huggingface.api.url}")
     private String apiUrl;
 
+    /** Token-ul de autentificare pentru HuggingFace API. */
     @Value("${huggingface.api.token}")
     private String apiToken;
 
+    /**
+     * Pragul de toxicitate peste care un text este blocat.
+     * Valori intre 0.0 si 1.0.
+     */
     private static final double TOXICITY_THRESHOLD = 0.5;
 
+    /**
+     * Analizeaza un text pentru toxicitate folosind HuggingFace API.
+     * In caz de eroare la apelul API, returneaza un rezultat de tip ERROR
+     * cu blocked = false.
+     *
+     * @param text textul de analizat
+     * @return rezultatul moderarii cu decizia, scorul si label-ul
+     */
     public ModerationResult analyzeText(String text) {
         try {
             HttpHeaders headers = new HttpHeaders();
@@ -61,5 +83,12 @@ public class ModerationService {
         return new ModerationResult(false, 0.0, "ERROR");
     }
 
+    /**
+     * Reprezinta rezultatul analizei de moderare a unui text.
+     *
+     * @param blocked true daca textul este blocat, false altfel
+     * @param confidence scorul de incredere al modelului
+     * @param label label-ul returnat de model
+     */
     public record ModerationResult(boolean blocked, double confidence, String label) {}
 }
